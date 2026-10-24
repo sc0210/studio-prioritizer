@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import multiprocessing
 import os
 import sys
 import time
@@ -79,6 +80,9 @@ def scan(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # LibRaw uses OpenMP, which can deadlock in forked workers, so start fresh
+    # ones. Set globally (not just on the pool) because rawpy checks the global.
+    multiprocessing.set_start_method("spawn", force=True)
     parser = argparse.ArgumentParser(prog="culler", description="Pre-cull travel photos for Capture One.")
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("scan", help="score a folder of photos and write XMP ratings")
