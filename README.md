@@ -34,7 +34,17 @@ XMP sidecars written: 1843
 Report: /photos/.studio-photo/report.html
 ```
 
-To view the report, open `~/Pictures/Japan-2026/.studio-photo/report.html` in a browser. It's a contact sheet you can filter by pick, similar or reject, by file type (ARW or JPG), by minimum stars or by note (needs exposure fix, possible blink). You can also sort it by time, by score or by file name, and search by file name. Click a photo to open a larger preview with its EXIF data, and use ← → to step through. Your filter settings are remembered between visits. `results.csv` in the same folder has every metric, if you want to tune the thresholds.
+To view the report, open `~/Pictures/Japan-2026/.studio-photo/report.html` in a browser. The report includes:
+
+- **Rank:** every non-rejected photo gets a rank (#1 is the strongest of the trip). A **Top 10 / 25 / 50 / 100** filter jumps straight to the best photos.
+- **Filters:** by pick, similar or reject, by file type (ARW or JPG), by minimum stars, or by note (needs exposure fix, possible blink). You can also search by file name.
+- **One per burst:** shows only the best frame of each burst. The viewer shows the other frames in a strip.
+- **Viewer:** click a photo for a large preview with its EXIF data, and use ← → to step through. **Focus area** (`F`) outlines where the focus score was measured. **Fix exposure** (`E`) previews a dark or bright shot with its exposure evened out.
+- **Compare:** tick 2 to 4 photos (or press `C`) to see them side by side.
+- **Day headers:** when sorted by time, photos are grouped under the day they were taken.
+- **Copy names:** puts the file names in the current view on the clipboard.
+
+Press `?` in the report for all shortcuts. Your filter settings are remembered between visits.
 
 Pass options after the service name:
 

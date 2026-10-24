@@ -29,7 +29,7 @@ def write_results(results: list[Result], root: Path, out_dir: Path) -> None:
         writer = csv.DictWriter(f, fieldnames=list(rows[0]) if rows else ["file"])
         writer.writeheader()
         for row in rows:
-            writer.writerow({k: "; ".join(v) if isinstance(v, list) else v for k, v in row.items()})
+            writer.writerow({k: "; ".join(map(str, v)) if isinstance(v, list) else v for k, v in row.items()})
     (out_dir / "report.html").write_text(_html(results, root))
 
 
@@ -58,6 +58,7 @@ def _row(r: Result, root: Path) -> dict:
         "focal_length": i.focal_length,
         "gps": list(i.gps) if i.gps else None,
         "sharpness": round(m.sharpness, 1),
+        "focus_tile": list(m.focus_tile),
         "brightness": round(m.brightness, 1),
         "highlights_clipped": round(m.highlights_clipped, 4),
         "shadows_clipped": round(m.shadows_clipped, 4),

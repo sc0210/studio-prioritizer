@@ -26,6 +26,8 @@ class Metrics:
     sharpness: float
     # Focus of the whole frame, used to tell motion blur from a soft background.
     global_sharpness: float
+    # (row, col) in a 4x4 grid of the region the focus score came from.
+    focus_tile: tuple[int, int]
     # Spread between the 1st and 99th luminance percentiles. Near zero means
     # the frame holds no picture at all (lens cap, pocket shot).
     tonal_range: float
@@ -41,11 +43,12 @@ def measure(rgb: np.ndarray) -> Metrics:
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     low, high = np.percentile(gray, (1, 99))
     normalized = _normalize(gray, low, high)
-    sharpness, global_sharpness = _sharpness(normalized)
+    sharpness, global_sharpness, focus_tile = _sharpness(normalized)
     faces, closed = _faces(_normalize(rgb, low, high), normalized)
     return Metrics(
         sharpness=sharpness,
         global_sharpness=global_sharpness,
+        focus_tile=focus_tile,
         tonal_range=float(high - low),
         brightness=float(gray.mean()),
         shadows_clipped=float((gray <= 3).mean()),
@@ -66,17 +69,19 @@ def _normalize(image: np.ndarray, low: float, high: float) -> np.ndarray:
     return np.clip(stretched, 0, 255).astype(np.uint8)
 
 
-def _sharpness(gray: np.ndarray, grid: int = 4) -> tuple[float, float]:
+def _sharpness(gray: np.ndarray, grid: int = 4) -> tuple[float, float, tuple[int, int]]:
+    """Best-tile focus, whole-frame focus, and the (row, col) of the best tile."""
     # Light denoise first so high ISO grain doesn't read as detail.
     smooth = cv2.GaussianBlur(gray, (3, 3), 0)
     lap = cv2.Laplacian(smooth, cv2.CV_64F)
     h, w = lap.shape
-    tiles = [
-        lap[r * h // grid : (r + 1) * h // grid, c * w // grid : (c + 1) * w // grid].var()
+    tiles = {
+        (r, c): lap[r * h // grid : (r + 1) * h // grid, c * w // grid : (c + 1) * w // grid].var()
         for r in range(grid)
         for c in range(grid)
-    ]
-    return float(max(tiles)), float(lap.var())
+    }
+    best = max(tiles, key=tiles.get)
+    return float(tiles[best]), float(lap.var()), best
 
 
 def _faces(rgb: np.ndarray, gray: np.ndarray) -> tuple[int, int]:
