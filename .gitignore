@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.studio-photo/
+.pytest_cache/
+samples/
