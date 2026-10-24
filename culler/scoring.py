@@ -12,6 +12,10 @@ from .loader import PhotoInfo
 from .metrics import Metrics
 
 
+# Problems no amount of editing fixes. Everything else is only a note.
+REJECT_REASONS = {"blurry", "empty frame"}
+
+
 @dataclass
 class Thresholds:
     # Best-tile Laplacian variance on the 1024px preview below which a photo is
@@ -19,6 +23,9 @@ class Thresholds:
     blur_floor: float = 60.0
     # Also reject if far softer than this shoot's typical photo.
     blur_relative: float = 0.2
+    # 1st-99th percentile luminance spread below which there's no picture.
+    empty_frame_range: float = 6.0
+    # Exposure limits only add an "overexposed"/"underexposed" note.
     highlights_max: float = 0.25
     shadows_max: float = 0.45
     too_dark: float = 22.0
@@ -60,8 +67,12 @@ def score_all(results: list[Result], t: Thresholds | None = None) -> list[Result
 def _score_one(r: Result, blur_limit: float, t: Thresholds) -> None:
     m = r.metrics
     reasons = []
-    if m.sharpness < blur_limit:
+    if m.tonal_range < t.empty_frame_range:
+        reasons.append("empty frame")
+    elif m.sharpness < blur_limit:
         reasons.append("blurry")
+    # Exposure is noted so it can be filtered on, but never rejects or costs
+    # points: a RAW with the wrong exposure is fixed in Capture One in seconds.
     washed_out = m.brightness > t.too_bright - 20 and m.highlights_clipped > t.highlights_max / 2
     if m.highlights_clipped > t.highlights_max or m.brightness > t.too_bright or washed_out:
         reasons.append("overexposed")
@@ -70,22 +81,17 @@ def _score_one(r: Result, blur_limit: float, t: Thresholds) -> None:
 
     # 0 at the blur limit, 1 at ten times it.
     sharp = min(max(math.log10(max(m.sharpness, 1e-6) / blur_limit), 0.0), 1.0)
-    exposure = 1.0 - min(1.0, 2 * m.highlights_clipped + m.shadows_clipped)
-    if m.brightness < 60:
-        exposure -= (60 - m.brightness) / 120
-    elif m.brightness > 190:
-        exposure -= (m.brightness - 190) / 130
-    exposure = max(exposure, 0.0)
     eyes = 1.0
     if m.faces:
         eyes = 1.0 - m.faces_eyes_closed / m.faces
         if m.faces_eyes_closed:
             reasons.append("eyes closed?")
 
-    r.score = round(100 * (0.6 * sharp + 0.3 * exposure + 0.1 * eyes), 1)
+    r.score = round(100 * (0.85 * sharp + 0.15 * eyes), 1)
     r.reasons = reasons
-    # A possible blink alone isn't enough to throw a photo away; it only costs points.
-    r.decision = "reject" if set(reasons) - {"eyes closed?"} else "pick"
+    # Only what can't be fixed in editing rejects a photo. A possible blink
+    # is too unreliable to act on alone, so it only costs points.
+    r.decision = "reject" if REJECT_REASONS & set(reasons) else "pick"
 
 
 def _group_bursts(results: list[Result], t: Thresholds) -> None:

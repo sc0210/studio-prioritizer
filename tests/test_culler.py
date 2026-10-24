@@ -80,6 +80,21 @@ def test_blurry_frame_measures_softer():
     assert measure(soft).sharpness < measure(sharp).sharpness / 5
 
 
+def test_dark_frame_is_not_mistaken_for_blurry():
+    sharp = data.astronaut()
+    dark = (sharp * 0.05).astype("uint8")
+    assert measure(dark).sharpness > measure(sharp).sharpness / 3
+
+
+def test_empty_frame_is_rejected(tmp_path: Path):
+    _save(Image.fromarray(data.astronaut()), tmp_path / "A.JPG", START)
+    _save(Image.new("RGB", (800, 600), (4, 4, 4)), tmp_path / "B.JPG", START + timedelta(minutes=1))
+    main(["scan", str(tmp_path), "--workers", "1"])
+    rows = _results(tmp_path)
+    assert rows["B.JPG"]["decision"] == "reject"
+    assert "empty frame" in rows["B.JPG"]["reasons"]
+
+
 def test_scan_end_to_end(trip: Path):
     assert main(["scan", str(trip), "--workers", "2"]) == 0
     rows = _results(trip)
@@ -94,8 +109,12 @@ def test_scan_end_to_end(trip: Path):
     assert rows["DSC00011.JPG"]["decision"] == "pick"
     assert rows["DSC00020.JPG"]["decision"] == "reject"
     assert "blurry" in rows["DSC00020.JPG"]["reasons"]
+    # Exposure is fixable in editing: noted, but the photos stay in.
     assert "overexposed" in rows["DSC00030.JPG"]["reasons"]
     assert "underexposed" in rows["DSC00031.JPG"]["reasons"]
+    assert rows["DSC00030.JPG"]["decision"] == "pick"
+    assert rows["DSC00031.JPG"]["decision"] == "pick"
+    assert "studio-photo/underexposed" in sidecar_path(trip / "DSC00031.JPG").read_text()
 
     xmp = sidecar_path(trip / "DSC00020.JPG").read_text()
     assert 'xmp:Label="Red"' in xmp and 'xmp:Rating="1"' in xmp

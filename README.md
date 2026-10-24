@@ -2,7 +2,9 @@
 
 Pre-culls a travel shoot so you only look at the photos worth editing.
 
-Point it at a folder of Sony `.ARW` (or JPEG) files. It scores every frame and flags the weak ones: out of focus, blown out, too dark, a possible blink, or a near-copy of a better frame in the same burst. Then it writes an XMP sidecar next to each photo, which Capture One reads as star ratings and color labels.
+Point it at a folder of Sony `.ARW` (or JPEG) files. It scores every frame and flags the ones you can't rescue: out of focus, or an empty frame (lens cap, pocket shot). It also marks near-copies of a better frame in the same burst. Then it writes an XMP sidecar next to each photo, which Capture One reads as star ratings and color labels.
+
+Exposure problems are **noted but never held against a photo**, because a RAW that's too bright or too dark is fixed in seconds in Capture One. Those photos keep their rank and get an `overexposed` or `underexposed` keyword, so you can find them quickly.
 
 Nothing is moved or deleted. The sidecars and a report are the only files it writes.
 
@@ -10,9 +12,9 @@ Nothing is moved or deleted. The sidecars and a report are the only files it wri
 |---|---|---|
 | 🟢 Green | Keeper, the best frame of its burst | 2–5, by score across the whole shoot |
 | 🟡 Yellow | Fine, but a better near-identical frame exists | at most 2 |
-| 🔴 Red | Reject: blurry, overexposed or underexposed | 1 |
+| 🔴 Red | Reject: out of focus or an empty frame | 1 |
 
-Each sidecar also adds keywords such as `studio-photo/reject` and `studio-photo/blurry`, so you can filter on the reason in Capture One.
+Each sidecar also adds keywords such as `studio-photo/reject`, `studio-photo/blurry` and `studio-photo/underexposed`, so you can filter on the reason in Capture One.
 
 ## Run it with Docker (macOS)
 
@@ -59,12 +61,12 @@ If you already imported the folder, select the images and choose **Image → Syn
 
 All metrics run on the JPEG preview embedded in each ARW, scaled down to 1024 px. The full RAW is never decoded, which is what keeps the scan fast on a laptop CPU. Docker on macOS can't use the Apple GPU, so nothing here needs one.
 
-- **Focus.** Measured as Laplacian variance on the sharpest tile of a 4×4 grid, so a sharp subject against a blurred background still counts as in focus. A frame is rejected below `--blur-floor`, or when it's below 20% of the shoot's median focus.
-- **Exposure.** Measured from the share of clipped highlights and shadows, plus mean brightness.
+- **Focus.** Measured as Laplacian variance on the sharpest tile of a 4×4 grid, so a sharp subject against a blurred background still counts as in focus. The tones are stretched first, as if the exposure were already fixed, so a dark but sharp frame isn't mistaken for a blurry one. A frame is rejected below `--blur-floor`, or when it's below 20% of the shoot's median focus.
+- **Exposure.** Measured from the share of clipped highlights and shadows, plus mean brightness. It only adds a note and doesn't change the score.
 - **Blinks.** OpenCV face detection, then a check for open eyes in each face. A face with no open eye costs points but never rejects a photo on its own.
 - **Bursts.** Frames taken within 2 seconds of each other that also look alike (perceptual hash) form a group. The highest-scoring frame of each group gets green, the rest get yellow.
 
-The score is 60% focus, 30% exposure and 10% eyes. Stars rank the keepers against each other: the top 10% get 5★, the next 20% 4★, the next 40% 3★, and the rest 2★.
+The score is 85% focus and 15% eyes. Stars rank the keepers against each other: the top 10% get 5★, the next 20% 4★, the next 40% 3★, and the rest 2★.
 
 ## Development
 
