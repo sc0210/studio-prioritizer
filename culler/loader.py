@@ -37,23 +37,24 @@ class PhotoInfo:
 def find_photos(root: Path) -> list[Path]:
     """All supported files under root, skipping hidden folders and macOS '._' files.
 
-    When a RAW and a JPEG share a name (RAW+JPEG shooting), only the RAW is kept,
-    because that's the file that goes into Capture One.
+    When a RAW and a JPEG share a file name (RAW+JPEG shooting), only the RAW
+    is kept, because that's the file that goes into Capture One. They are
+    paired anywhere in the tree, since many people copy the JPEGs into their
+    own folder.
     """
-    photos: dict[tuple[Path, str], Path] = {}
+    raws, jpegs = [], []
     for path in sorted(root.rglob("*")):
         if any(part.startswith(".") for part in path.relative_to(root).parts):
             continue
         if path.name.startswith("._") or not path.is_file():
             continue
         ext = path.suffix.lower()
-        if ext not in SUPPORTED_EXTENSIONS:
-            continue
-        key = (path.parent, path.stem)
-        if key in photos and photos[key].suffix.lower() in RAW_EXTENSIONS:
-            continue
-        photos[key] = path
-    return sorted(photos.values())
+        if ext in RAW_EXTENSIONS:
+            raws.append(path)
+        elif ext in JPEG_EXTENSIONS:
+            jpegs.append(path)
+    raw_names = {p.stem.lower() for p in raws}
+    return sorted(raws + [p for p in jpegs if p.stem.lower() not in raw_names])
 
 
 def load_preview(path: Path) -> np.ndarray:

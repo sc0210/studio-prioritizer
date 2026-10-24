@@ -68,10 +68,37 @@ def test_find_photos_prefers_raw_and_skips_junk(tmp_path: Path):
     assert [p.name for p in find_photos(tmp_path)] == ["A.ARW", "B.jpg"]
 
 
+def test_find_photos_pairs_raw_and_jpeg_across_folders(tmp_path: Path):
+    (tmp_path / "ARW").mkdir()
+    (tmp_path / "JPG").mkdir()
+    (tmp_path / "ARW" / "A7406844.ARW").write_bytes(b"x")
+    (tmp_path / "JPG" / "A7406844.jpg").write_bytes(b"x")
+    (tmp_path / "JPG" / "A7406999.jpg").write_bytes(b"x")
+    found = [p.relative_to(tmp_path).as_posix() for p in find_photos(tmp_path)]
+    assert found == ["ARW/A7406844.ARW", "JPG/A7406999.jpg"]
+
+
 def test_exif_is_read(trip: Path):
     info = read_exif(trip / "DSC00002.JPG")
     assert info.camera == "SONY ILCE-7M4"
     assert info.captured_at == START  # whole seconds only in this fixture
+
+
+def test_faces_only_where_there_are_people():
+    assert measure(data.astronaut()).faces == 1
+    for scene in (data.coffee(), data.rocket(), data.chelsea()):
+        assert measure(scene).faces == 0
+
+
+def test_covered_eyes_are_flagged():
+    import cv2
+
+    face = data.astronaut().copy()
+    skin = face[125, 220].tolist()
+    for x, y in [(200, 102), (247, 103)]:
+        cv2.ellipse(face, (x, y), (14, 7), 0, 0, 360, skin, -1)
+    assert measure(data.astronaut()).faces_eyes_closed == 0
+    assert measure(face).faces_eyes_closed == 1
 
 
 def test_blurry_frame_measures_softer():

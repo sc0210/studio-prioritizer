@@ -2,7 +2,7 @@
 
 Pre-culls a travel shoot so you only look at the photos worth editing.
 
-Point it at a folder of Sony `.ARW` (or JPEG) files. It scores every frame and flags the ones you can't rescue: out of focus, or an empty frame (lens cap, pocket shot). It also marks near-copies of a better frame in the same burst. Then it writes an XMP sidecar next to each photo, which Capture One reads as star ratings and color labels.
+Point it at a folder of Sony `.ARW` (or JPEG) files. If you shoot RAW+JPEG, only the ARW is scored, even when the JPEGs sit in a different folder. It scores every frame and flags the ones you can't rescue: out of focus, or an empty frame (lens cap, pocket shot). It also marks near-copies of a better frame in the same burst. Then it writes an XMP sidecar next to each photo, which Capture One reads as star ratings and color labels.
 
 Exposure problems are **noted but never held against a photo**, because a RAW that's too bright or too dark is fixed in seconds in Capture One. Those photos keep their rank and get an `overexposed` or `underexposed` keyword, so you can find them quickly.
 
@@ -63,7 +63,7 @@ All metrics run on the JPEG preview embedded in each ARW, scaled down to 1024 px
 
 - **Focus.** Measured as Laplacian variance on the sharpest tile of a 4×4 grid, so a sharp subject against a blurred background still counts as in focus. The tones are stretched first, as if the exposure were already fixed, so a dark but sharp frame isn't mistaken for a blurry one. A frame is rejected below `--blur-floor`, or when it's below 20% of the shoot's median focus.
 - **Exposure.** Measured from the share of clipped highlights and shadows, plus mean brightness. It only adds a note and doesn't change the score.
-- **Blinks.** OpenCV face detection, then a check for open eyes in each face. A face with no open eye costs points but never rejects a photo on its own.
+- **Blinks.** Faces are found with [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet), a small neural face detector (MIT licensed, bundled in `culler/models/`). Each eye is then checked for being open. A face with no open eye costs points but never rejects a photo on its own. Faces that are tiny in the frame are ignored.
 - **Bursts.** Frames taken within 2 seconds of each other that also look alike (perceptual hash) form a group. The highest-scoring frame of each group gets green, the rest get yellow.
 
 The score is 85% focus and 15% eyes. Stars rank the keepers against each other: the top 10% get 5★, the next 20% 4★, the next 40% 3★, and the rest 2★.
