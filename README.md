@@ -34,7 +34,7 @@ XMP sidecars written: 1843
 Report: /photos/.studio-photo/report.html
 ```
 
-To view the report, open `~/Pictures/Japan-2026/.studio-photo/report.html` in a browser. It's a contact sheet grouped by burst, with rejects hidden by default. `results.csv` in the same folder has every metric, if you want to tune the thresholds.
+To view the report, open `~/Pictures/Japan-2026/.studio-photo/report.html` in a browser. It's a contact sheet you can filter by pick, similar or reject, by file type (ARW or JPG), by minimum stars or by note (needs exposure fix, possible blink). You can also sort it by time, by score or by file name, and search by file name. Click a photo to open a larger preview with its EXIF data, and use ← → to step through. Your filter settings are remembered between visits. `results.csv` in the same folder has every metric, if you want to tune the thresholds.
 
 Pass options after the service name:
 

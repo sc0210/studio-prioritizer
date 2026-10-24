@@ -12,7 +12,7 @@ from pathlib import Path
 from . import xmp
 from .loader import find_photos, load_preview, read_exif
 from .metrics import measure
-from .report import save_thumbnail, thumb_name, write_results
+from .report import save_images, write_results
 from .scoring import Result, Thresholds, score_all
 
 
@@ -21,7 +21,7 @@ def _analyse(job: tuple[Path, Path, Path]) -> Result | str:
     try:
         rgb = load_preview(path)
         result = Result(info=read_exif(path), metrics=measure(rgb))
-        save_thumbnail(rgb, out_dir / thumb_name(result, root))
+        save_images(rgb, result, root, out_dir)
         return result
     except Exception as exc:  # one bad file shouldn't stop a whole trip
         return f"{path}: {exc}"
@@ -33,7 +33,8 @@ def scan(args: argparse.Namespace) -> int:
         print(f"Not a folder: {root}", file=sys.stderr)
         return 2
     out_dir = Path(args.out).resolve() if args.out else root / ".studio-photo"
-    (out_dir / "thumbs").mkdir(parents=True, exist_ok=True)
+    for kind in ("thumbs", "previews"):
+        (out_dir / kind).mkdir(parents=True, exist_ok=True)
 
     photos = find_photos(root)
     if not photos:
