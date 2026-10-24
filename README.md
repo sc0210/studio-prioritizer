@@ -22,10 +22,10 @@ You need [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
 ```sh
 git clone https://github.com/sc0210/studio-prioritizer && cd studio-prioritizer
-PHOTOS=~/Pictures/Japan-2026 docker compose run --rm culler
+PHOTOS=~/Pictures/Japan-2026 docker compose run --build --rm culler
 ```
 
-The first run builds the image (a few minutes). After that, a scan prints a summary and the path of the report:
+`--build` rebuilds the image whenever the code has changed, so a `git pull` takes effect straight away. The first build takes a few minutes, and later ones are near-instant when nothing changed. A scan prints a summary and the path of the report:
 
 ```
 Scoring 1843 photos from /photos ...
@@ -39,7 +39,7 @@ To view the report, open `~/Pictures/Japan-2026/.studio-photo/report.html` in a 
 Pass options after the service name:
 
 ```sh
-PHOTOS=~/Pictures/Japan-2026 docker compose run --rm culler scan /photos --dry-run
+PHOTOS=~/Pictures/Japan-2026 docker compose run --build --rm culler scan /photos --dry-run
 ```
 
 | Option | What it does |
