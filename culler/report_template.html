@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Culling report</title>
+<style>
+:root {
+  --bg: #f5f5f3; --panel: #ffffff; --fg: #1c1c1a; --muted: #6b6b66; --line: #e2e2dd;
+  --chip: #ececea; --chip-on: #1c1c1a; --chip-on-fg: #ffffff;
+  --pick: #2e8b57; --duplicate: #c9a227; --reject: #c0392b; --note: #b4632a; --accent: #2f6fde;
+  --thumb: 220px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141413; --panel: #1f1f1d; --fg: #ececea; --muted: #9a9a94; --line: #2e2e2b;
+    --chip: #2a2a27; --chip-on: #ececea; --chip-on-fg: #141413; --note: #e09a5f; --accent: #6b9cff;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+button, select, input { font: inherit; color: inherit; }
+kbd { font: 12px ui-monospace, Menlo, monospace; background: var(--chip); border-radius: 4px; padding: 1px 6px; }
+
+.bar { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line);
+  padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.bar h1 { font-size: 17px; margin: 0; font-weight: 650; }
+.group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.group > .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; margin-right: 2px; }
+.chip { border: 0; background: var(--chip); border-radius: 999px; padding: 4px 11px; cursor: pointer; white-space: nowrap; }
+.chip[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-fg); }
+.chip .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.chip .n { opacity: .65; margin-left: 4px; font-variant-numeric: tabular-nums; }
+select, input[type=search] { background: var(--chip); border: 0; border-radius: 8px; padding: 5px 8px; }
+input[type=search] { width: 170px; }
+input[type=range] { width: 110px; accent-color: var(--fg); }
+.tools { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.status { color: var(--muted); font-variant-numeric: tabular-nums; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+main { padding: 16px; display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--thumb), 100%), 1fr)); }
+.empty { padding: 60px 16px; text-align: center; color: var(--muted); grid-column: 1 / -1; }
+.day { grid-column: 1 / -1; margin: 10px 0 -2px; font-weight: 600; display: flex; gap: 10px; align-items: baseline; }
+.day:first-child { margin-top: 0; }
+.day span { color: var(--muted); font-weight: 400; }
+figure { margin: 0; background: var(--panel); border-radius: 8px; overflow: hidden; cursor: zoom-in;
+  border-top: 4px solid var(--pick); display: flex; flex-direction: column; position: relative; }
+figure.duplicate { border-top-color: var(--duplicate); }
+figure.reject { border-top-color: var(--reject); }
+figure.reject img { opacity: .6; }
+figure.selected { outline: 3px solid var(--accent); outline-offset: 1px; }
+figure:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.pic { position: relative; }
+figure img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; display: block; background: #0002; }
+.rank { position: absolute; left: 8px; bottom: 8px; background: #000b; color: #fff; font-weight: 650;
+  font-size: 12px; padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+.more { position: absolute; right: 8px; bottom: 8px; background: #000b; color: #fff; font-size: 12px; padding: 1px 7px; border-radius: 999px; }
+.select { position: absolute; left: 8px; top: 8px; width: 24px; height: 24px; border-radius: 6px; border: 2px solid #fff;
+  background: #0006; color: #fff; cursor: pointer; padding: 0; line-height: 18px; font-size: 14px; opacity: 0; transition: opacity .1s; }
+figure:hover .select, figure.selected .select, .select:focus-visible { opacity: 1; }
+figure.selected .select { background: var(--accent); border-color: var(--accent); }
+@media (hover: none) { .select { opacity: 1; } }
+figcaption { padding: 8px 10px 10px; display: grid; gap: 3px; }
+.row { display: flex; gap: 6px; align-items: baseline; justify-content: space-between; }
+.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.type { font-size: 11px; padding: 0 5px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+.stars { letter-spacing: 1px; }
+.score { color: var(--muted); font-variant-numeric: tabular-nums; }
+.meta { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--chip); color: var(--muted); }
+.tag.fix { color: var(--note); }
+.tag.bad { color: var(--reject); }
+
+dialog { border: 0; padding: 0; width: min(1400px, 96vw); height: min(900px, 92vh); background: var(--panel); color: var(--fg);
+  border-radius: 12px; overflow: hidden; }
+dialog::backdrop { background: #000c; }
+.viewer { display: grid; grid-template-columns: 250px 1fr 300px; height: 100%; }
+.stage:focus { outline: none; }
+.stage { background: #0a0a0a; display: flex; align-items: center; justify-content: center; position: relative; min-height: 0; }
+.frame { position: relative; max-width: 100%; max-height: 100%; display: flex; overflow: hidden; }
+.frame img { max-width: 100%; max-height: min(900px, 92vh); object-fit: contain; display: block; }
+.focusbox { position: absolute; width: 25%; height: 25%; border: 2px solid #4cff8f; box-shadow: 0 0 0 9999px #0005; pointer-events: none; display: none; }
+.show-focus .focusbox { display: block; }
+.frame .overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; display: none; filter: url(#focusTint); }
+.frame.show-focusmap .overlay { display: block; }
+.panel { padding: 14px; overflow: auto; border-right: 1px solid var(--line); display: grid; gap: 14px; align-content: start; }
+.panel h3 { font-size: 12px; margin: 0 0 6px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.panel canvas { width: 100%; height: 96px; background: #111; border-radius: 6px; display: block; }
+.clipinfo { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.clipinfo .warn { color: var(--reject); }
+.slider { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; font-size: 13px; }
+.slider output { color: var(--muted); font-variant-numeric: tabular-nums; }
+.slider input { grid-column: 1 / -1; width: 100%; accent-color: var(--fg); }
+#temp { accent-color: #d98a2b; } #tint { accent-color: #b04fb0; }
+.panel .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.panel .chip[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-fg); }
+.legend { font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 8px; vertical-align: -1px; }
+.legend i:first-child { margin-left: 0; }
+.nav { position: absolute; top: 50%; transform: translateY(-50%); border: 0; background: #0008; color: #fff;
+  width: 40px; height: 64px; font-size: 26px; cursor: pointer; border-radius: 6px; }
+.nav.prev { left: 10px; } .nav.next { right: 10px; }
+.info { padding: 16px; overflow: auto; border-left: 1px solid var(--line); }
+.info h2 { font-size: 16px; margin: 0 28px 4px 0; word-break: break-all; }
+.info dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 14px 0 0; }
+.info dt { color: var(--muted); }
+.info dd { margin: 0; overflow-wrap: anywhere; }
+.info h3 { font-size: 13px; margin: 18px 0 8px; color: var(--muted); font-weight: 600; }
+.strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.strip button { border: 2px solid transparent; padding: 0; background: none; cursor: pointer; border-radius: 6px; overflow: hidden; position: relative; }
+.strip button.on { border-color: var(--accent); }
+.strip img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; display: block; }
+.strip small { position: absolute; left: 3px; bottom: 3px; background: #000b; color: #fff; font-size: 10px; padding: 0 4px; border-radius: 3px; }
+.close { position: absolute; top: 10px; right: 12px; border: 0; background: none; font-size: 22px; cursor: pointer; color: var(--muted); z-index: 2; }
+.hint { color: var(--muted); font-size: 12px; margin-top: 18px; }
+
+.compare { display: grid; gap: 4px; height: 100%; background: #0a0a0a; padding: 4px; }
+.compare figure { cursor: pointer; border-radius: 6px; background: #000; border-top-width: 3px; min-height: 0; }
+.compare figure img { aspect-ratio: auto; flex: 1; min-height: 0; object-fit: contain; background: #000; }
+.compare figcaption { background: var(--panel); }
+
+#help dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; }
+#help { width: min(440px, 92vw); height: fit-content; padding: 22px; }
+#help h2 { margin: 0 0 14px; font-size: 17px; }
+
+@media (max-width: 760px) {
+  dialog#viewer { height: 94vh; }
+  .viewer { grid-template-columns: 1fr; grid-template-rows: 45vh auto auto; height: auto; max-height: 100%; overflow: auto; }
+  .stage { order: 0; }
+  .panel { order: 1; border-right: 0; border-top: 1px solid var(--line); }
+  .info { order: 2; border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
+  .tools { margin-left: 0; }
+  .bar { position: static; }
+}
+</style>
+</head>
+<body>
+<div class="bar">
+  <h1>Culling report</h1>
+  <div class="group" id="decisions"><span class="label">Show</span></div>
+  <div class="group" id="types"><span class="label">File</span></div>
+  <div class="group">
+    <span class="label">Top</span>
+    <select id="top" aria-label="Show only the top ranked photos">
+      <option value="0">All</option><option value="10">Top 10</option><option value="25">Top 25</option>
+      <option value="50">Top 50</option><option value="100">Top 100</option>
+    </select>
+  </div>
+  <div class="group">
+    <span class="label">Rating</span>
+    <select id="stars" aria-label="Minimum stars">
+      <option value="0">Any</option><option value="2">★★ and up</option><option value="3">★★★ and up</option>
+      <option value="4">★★★★ and up</option><option value="5">★★★★★</option>
+    </select>
+  </div>
+  <div class="group">
+    <span class="label">Note</span>
+    <select id="note" aria-label="Filter by note">
+      <option value="">Any</option>
+      <option value="none">No notes</option>
+      <option value="exposure">Needs exposure fix</option>
+      <option value="eyes closed?">Possible blink</option>
+      <option value="blurry">Blurry</option>
+      <option value="empty frame">Empty frame</option>
+    </select>
+  </div>
+  <div class="group">
+    <span class="label">Sort</span>
+    <select id="sort" aria-label="Sort order">
+      <option value="time">Time</option>
+      <option value="rank">Rank</option>
+      <option value="name">File name</option>
+    </select>
+  </div>
+  <div class="group" id="bursts"></div>
+  <input type="search" id="search" placeholder="Search file name" aria-label="Search file name">
+  <div class="group"><span class="label">Size</span><input type="range" id="size" min="140" max="420" step="20" aria-label="Thumbnail size"></div>
+  <div class="tools">
+    <span class="status" id="status"></span>
+    <button class="btn" id="copy" title="Copy the file names shown, one per line">Copy names</button>
+    <button class="btn primary" id="compareBtn" disabled>Compare</button>
+    <button class="btn" id="clearSel" hidden>Clear</button>
+    <button class="btn" id="helpBtn" aria-label="Keyboard shortcuts">?</button>
+  </div>
+</div>
+<main id="grid"></main>
+
+<dialog id="viewer">
+  <div class="viewer">
+    <div class="panel">
+      <div>
+        <h3>Histogram</h3>
+        <canvas id="hist" width="440" height="192" aria-label="RGB histogram"></canvas>
+        <div class="clipinfo"><span id="clipLo"></span><span id="clipHi"></span></div>
+      </div>
+      <div>
+        <h3>Adjust (preview only)</h3>
+        <div class="slider"><label for="ev">Exposure</label><output id="evOut"></output>
+          <input type="range" id="ev" min="-2" max="2" step="0.1" value="0"></div>
+        <div class="slider"><label for="temp">Temperature</label><output id="tempOut"></output>
+          <input type="range" id="temp" min="-100" max="100" step="1" value="0"></div>
+        <div class="slider"><label for="tint">Tint</label><output id="tintOut"></output>
+          <input type="range" id="tint" min="-100" max="100" step="1" value="0"></div>
+        <div class="btns"><button class="chip" id="auto" title="Even out the exposure">Auto exposure</button>
+          <button class="chip" id="reset" title="Back to the original (R)">Reset</button></div>
+      </div>
+      <div>
+        <h3>Maps</h3>
+        <div class="btns">
+          <button class="chip" id="clipToggle" title="Mark blown highlights and crushed shadows (X)">Clipping</button>
+          <button class="chip" id="focusMapToggle" title="Highlight the sharp areas (M)">Focus map</button>
+          <button class="chip" id="focusToggle" title="Outline the area the focus score came from (F)">Focus area</button>
+        </div>
+        <p class="legend" id="legend"></p>
+      </div>
+      <div class="btns"><button class="chip" id="selToggle" title="Add to compare (C)">Add to compare</button></div>
+    </div>
+    <div class="stage" id="stage" tabindex="-1">
+      <div class="frame" id="frame"><img id="big" alt=""><img class="overlay" id="focusmap" alt=""><div class="focusbox" id="focusbox"></div></div>
+      <button class="nav prev" id="prev" aria-label="Previous photo">‹</button>
+      <button class="nav next" id="next" aria-label="Next photo">›</button>
+    </div>
+    <div class="info" id="info"></div>
+  </div>
+  <button class="close" data-close aria-label="Close">✕</button>
+</dialog>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- Preview adjustments. Gains are set from JS on both matrices. -->
+  <filter id="adjust" color-interpolation-filters="sRGB"><feColorMatrix id="adjustMatrix" type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0"/></filter>
+  <filter id="clip" color-interpolation-filters="sRGB">
+    <feColorMatrix id="clipMatrix" type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0" result="adj"/>
+    <!-- 1 only in the top ~2% of each channel: a channel that is blown. -->
+    <feComponentTransfer in="adj" result="hi">
+      <feFuncR type="discrete" tableValues="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1"/>
+      <feFuncG type="discrete" tableValues="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1"/>
+      <feFuncB type="discrete" tableValues="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1"/>
+    </feComponentTransfer>
+    <!-- Red wherever any channel is blown. -->
+    <feColorMatrix in="hi" type="matrix" values="0 0 0 0 1 0 0 0 0 0.1 0 0 0 0 0.1 1 1 1 0 0" result="hiMask"/>
+    <!-- 1 only in the bottom ~2%: a channel crushed to black. -->
+    <feComponentTransfer in="adj" result="lo">
+      <feFuncR type="discrete" tableValues="1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"/>
+      <feFuncG type="discrete" tableValues="1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"/>
+      <feFuncB type="discrete" tableValues="1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"/>
+    </feComponentTransfer>
+    <!-- Blue only where all three channels are crushed (alpha = r+g+b-2). -->
+    <feColorMatrix in="lo" type="matrix" values="0 0 0 0 0.15 0 0 0 0 0.45 0 0 0 0 1 1 1 1 0 -2" result="loMask"/>
+    <feMerge><feMergeNode in="adj"/><feMergeNode in="loMask"/><feMergeNode in="hiMask"/></feMerge>
+  </filter>
+  <!-- Focus map: grayscale in, green with brightness as opacity out. -->
+  <filter id="focusTint" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values="0 0 0 0 0.25 0 0 0 0 1 0 0 0 0 0.45 0.25 0.25 0.25 0 0"/>
+  </filter>
+</svg>
+
+<dialog id="comparer">
+  <div class="compare" id="compareGrid"></div>
+  <button class="close" data-close aria-label="Close">✕</button>
+</dialog>
+
+<dialog id="help">
+  <h2>Keyboard shortcuts</h2>
+  <dl>
+    <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Previous / next photo in the viewer</dd>
+    <dt><kbd>M</kbd></dt><dd>Focus map: highlight the sharp areas</dd>
+    <dt><kbd>F</kbd></dt><dd>Outline the area the focus score came from</dd>
+    <dt><kbd>X</kbd></dt><dd>Clipping map: blown highlights red, crushed shadows blue</dd>
+    <dt><kbd>A</kbd> / <kbd>R</kbd></dt><dd>Auto exposure / reset adjustments</dd>
+    <dt><kbd>C</kbd></dt><dd>Add or remove the photo from Compare</dd>
+    <dt><kbd>Enter</kbd></dt><dd>Open the focused photo</dd>
+    <dt><kbd>Esc</kbd></dt><dd>Close</dd>
+  </dl>
+  <p class="hint">Rank orders every non-rejected photo by score, so #1 is the strongest of the trip.
+  "One per burst" keeps only the best frame of each burst; open it to see the others.</p>
+  <button class="close" data-close aria-label="Close">✕</button>
+</dialog>
+
+<script>
+const PHOTOS = /*DATA*/[];
+
+const DECISIONS = [
+  ["pick", "Picks", "var(--pick)"],
+  ["duplicate", "Similar", "var(--duplicate)"],
+  ["reject", "Rejects", "var(--reject)"],
+];
+const EXPOSURE = ["overexposed", "underexposed"];
+const REJECTING = ["blurry", "empty frame"];
+
+const defaults = { decisions: ["pick", "duplicate"], types: [], top: 0, stars: 0, note: "", sort: "time",
+  search: "", size: 220, collapse: false, showFocus: false, showFocusMap: false, showClipping: false };
+const state = { ...defaults, ...load() };
+// Preview adjustments, reset for every photo.
+const adjust = { ev: 0, temp: 0, tint: 0 };
+const selected = new Set();
+let visible = [];
+let viewList = [];
+let current = -1;
+
+function load() {
+  try { return JSON.parse(localStorage.getItem("culling-report") || "{}"); } catch { return {}; }
+}
+function save() {
+  try { localStorage.setItem("culling-report", JSON.stringify(state)); } catch {}
+}
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const count = (fn) => PHOTOS.filter(fn).length;
+const starText = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+
+// Rank every photo that wasn't rejected, best score first.
+const ranked = PHOTOS.filter((p) => p.decision !== "reject").sort((a, b) => b.score - a.score);
+ranked.forEach((p, i) => (p.rank = i + 1));
+PHOTOS.forEach((p, i) => (p.id = i));
+
+const bursts = {};
+for (const p of PHOTOS) (bursts[p.burst] ||= []).push(p);
+for (const list of Object.values(bursts)) list.sort((a, b) => b.score - a.score);
+
+function chip(group, key, text, n, dot) {
+  const b = document.createElement("button");
+  b.className = "chip";
+  b.innerHTML = (dot ? `<span class="dot" style="background:${dot}"></span>` : "") + esc(text) + (n == null ? "" : `<span class="n">${n}</span>`);
+  b.setAttribute("aria-pressed", state[group].includes(key));
+  b.onclick = () => {
+    const on = state[group].includes(key);
+    state[group] = on ? state[group].filter((k) => k !== key) : [...state[group], key];
+    b.setAttribute("aria-pressed", !on);
+    render();
+  };
+  return b;
+}
+
+function toggle(id, key, onChange) {
+  const b = $(id);
+  b.setAttribute("aria-pressed", !!state[key]);
+  b.onclick = () => {
+    state[key] = !state[key];
+    b.setAttribute("aria-pressed", state[key]);
+    save();
+    onChange();
+  };
+}
+
+function buildControls() {
+  for (const [key, text, color] of DECISIONS) $("decisions").append(chip("decisions", key, text, count((p) => p.decision === key), color));
+  const types = [...new Set(PHOTOS.map((p) => p.type))].sort();
+  // With only one file type there's nothing to filter.
+  if (types.length > 1) for (const t of types) $("types").append(chip("types", t, t, count((p) => p.type === t)));
+  else $("types").remove();
+
+  const collapse = document.createElement("button");
+  collapse.className = "chip";
+  collapse.id = "collapse";
+  collapse.textContent = "One per burst";
+  collapse.title = "Show only the best frame of each burst";
+  $("bursts").append(collapse);
+  toggle("collapse", "collapse", render);
+
+  for (const id of ["top", "stars", "note", "sort", "search", "size"]) {
+    const el = $(id);
+    el.value = state[id];
+    el.addEventListener("input", () => {
+      state[id] = ["size", "stars", "top"].includes(id) ? Number(el.value) : el.value;
+      id === "size" ? applySize() : render();
+    });
+  }
+  toggle("focusToggle", "showFocus", applyViewerTools);
+  toggle("focusMapToggle", "showFocusMap", applyViewerTools);
+  toggle("clipToggle", "showClipping", applyViewerTools);
+  for (const id of ["ev", "temp", "tint"]) {
+    $(id).addEventListener("input", () => { adjust[id] = Number($(id).value); applyViewerTools(); });
+    // Double-click a slider to put it back to zero.
+    $(id).addEventListener("dblclick", () => { adjust[id] = 0; applyViewerTools(); });
+  }
+  $("auto").onclick = autoExposure;
+  $("reset").onclick = resetAdjust;
+  applySize();
+}
+
+function applySize() {
+  document.documentElement.style.setProperty("--thumb", state.size + "px");
+  save();
+}
+
+function matches(p) {
+  if (!state.decisions.includes(p.decision)) return false;
+  if (state.types.length && !state.types.includes(p.type)) return false;
+  if (state.top && !(p.rank <= state.top)) return false;
+  if (p.stars < state.stars) return false;
+  if (state.note === "none" && p.reasons.some((r) => r !== "similar to a better shot")) return false;
+  if (state.note === "exposure" && !p.reasons.some((r) => EXPOSURE.includes(r))) return false;
+  if (state.note && !["none", "exposure"].includes(state.note) && !p.reasons.includes(state.note)) return false;
+  if (state.search && !p.file.toLowerCase().includes(state.search.toLowerCase())) return false;
+  return true;
+}
+
+const byTime = (a, b) => (a.captured_at || "~").localeCompare(b.captured_at || "~") || a.burst - b.burst || b.score - a.score;
+const sorters = {
+  time: byTime,
+  rank: (a, b) => (a.rank || 1e9) - (b.rank || 1e9) || b.score - a.score,
+  name: (a, b) => a.name.localeCompare(b.name),
+};
+
+function settings(p) {
+  return [p.shutter && p.shutter + "s", p.aperture && "f/" + p.aperture, p.iso && "ISO " + p.iso, p.focal_length && p.focal_length + "mm"]
+    .filter(Boolean).join(" · ");
+}
+
+function tags(p) {
+  return p.reasons.map((r) => {
+    const cls = REJECTING.includes(r) ? "bad" : EXPOSURE.includes(r) ? "fix" : "";
+    const text = EXPOSURE.includes(r) ? r + " (fixable)" : r;
+    return `<span class="tag ${cls}">${esc(text)}</span>`;
+  }).join("");
+}
+
+function card(p, i, hidden) {
+  const size = bursts[p.burst].length;
+  const burst = size > 1 && !hidden ? `<span class="tag">burst of ${size}</span>` : "";
+  const rank = p.rank ? `<span class="rank">#${p.rank}</span>` : "";
+  const more = hidden ? `<span class="more" title="More frames in this burst">+${hidden}</span>` : "";
+  const sel = selected.has(p.id);
+  return `<figure class="${p.decision}${sel ? " selected" : ""}" tabindex="0" data-i="${i}">
+    <div class="pic"><img loading="lazy" src="${esc(p.thumb)}" alt="">${rank}${more}
+      <button class="select" data-select="${p.id}" aria-label="Add to compare" aria-pressed="${sel}">${sel ? "✓" : ""}</button></div>
+    <figcaption>
+      <div class="row"><span class="name" title="${esc(p.file)}">${esc(p.name)}</span><span class="type">${esc(p.type)}</span></div>
+      <div class="row"><span class="stars">${starText(p.stars)}</span><span class="score">${Math.round(p.score)}</span></div>
+      <div class="meta">${esc(settings(p) || "—")}</div>
+      <div class="tags">${burst}${tags(p)}</div>
+    </figcaption></figure>`;
+}
+
+function dayOf(p) {
+  return p.captured_at ? p.captured_at.slice(0, 10) : "";
+}
+function dayLabel(day) {
+  if (!day) return "No date";
+  return new Date(day + "T12:00:00").toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+}
+
+function render() {
+  save();
+  let list = PHOTOS.filter(matches).sort(sorters[state.sort]);
+  const hiddenCount = {};
+  if (state.collapse) {
+    // Keep the best frame of each burst among those the filters let through.
+    const best = {};
+    for (const p of list) {
+      hiddenCount[p.burst] = (hiddenCount[p.burst] ?? -1) + 1;
+      if (!best[p.burst] || p.score > best[p.burst].score) best[p.burst] = p;
+    }
+    list = list.filter((p) => best[p.burst] === p);
+  }
+  visible = list;
+
+  const days = state.sort === "time" ? {} : null;
+  if (days) for (const p of visible) days[dayOf(p)] = (days[dayOf(p)] || 0) + 1;
+  let html = "";
+  let lastDay = null;
+  visible.forEach((p, i) => {
+    if (days && dayOf(p) !== lastDay) {
+      lastDay = dayOf(p);
+      html += `<h2 class="day">${esc(dayLabel(lastDay))}<span>${days[lastDay]} photos</span></h2>`;
+    }
+    html += card(p, i, state.collapse ? hiddenCount[p.burst] : 0);
+  });
+  $("grid").innerHTML = html || `<p class="empty">No photos match these filters.</p>`;
+  $("status").textContent = `Showing ${visible.length} of ${PHOTOS.length}`;
+  updateSelection();
+}
+
+function updateSelection() {
+  $("compareBtn").disabled = selected.size < 2;
+  $("compareBtn").textContent = selected.size ? `Compare ${selected.size}` : "Compare";
+  $("clearSel").hidden = !selected.size;
+}
+
+function toggleSelect(id) {
+  if (selected.has(id)) selected.delete(id);
+  else if (selected.size >= 4) return alert("Compare takes up to 4 photos.");
+  else selected.add(id);
+  for (const b of document.querySelectorAll(`[data-select="${id}"]`)) {
+    const on = selected.has(id);
+    b.textContent = on ? "✓" : "";
+    b.setAttribute("aria-pressed", on);
+    b.closest("figure").classList.toggle("selected", on);
+  }
+  if ($("viewer").open) $("selToggle").setAttribute("aria-pressed", selected.has(viewList[current]?.id));
+  updateSelection();
+}
+
+// Channel gains for the current sliders, on the gamma-encoded values the
+// browser works with. One stop of exposure is 2^(1/2.2) there.
+function gains() {
+  const ev = Math.pow(2, adjust.ev / 2.2);
+  const t = adjust.temp / 100, g = adjust.tint / 100;
+  return [ev * (1 + 0.25 * t), ev * (1 - 0.2 * g), ev * (1 - 0.25 * t)];
+}
+
+function resetAdjust() {
+  Object.assign(adjust, { ev: 0, temp: 0, tint: 0 });
+  applyViewerTools();
+}
+
+function autoExposure() {
+  const p = viewList[current];
+  // Aim the mean brightness at a mid grey, within the slider's range.
+  const ev = 2.2 * Math.log2(118 / Math.max(p.brightness, 4));
+  adjust.ev = Math.round(Math.min(2, Math.max(-2, ev)) * 10) / 10;
+  applyViewerTools();
+}
+
+function drawHistogram(p, [gr, gg, gb]) {
+  const c = $("hist"), ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, c.width, c.height);
+  if (!p.histogram) return;
+  const bins = p.histogram[0].length;
+  // Shift each channel's bins by its gain; what's pushed past the end clips.
+  const shifted = p.histogram.map((h, ch) => {
+    const k = [gr, gg, gb][ch], out = new Array(bins).fill(0);
+    h.forEach((v, i) => (out[Math.min(bins - 1, Math.floor(((i + 0.5) * k)))] += v));
+    return out;
+  });
+  const peak = Math.max(1, ...shifted.map((h) => Math.max(...h.slice(1, -1))));
+  const w = c.width / bins;
+  ctx.globalCompositeOperation = "lighter";
+  ["#e0443a", "#3fbf5a", "#3a7be0"].forEach((color, ch) => {
+    ctx.fillStyle = color;
+    shifted[ch].forEach((v, i) => {
+      const h = Math.min(1, v / peak) * c.height;
+      ctx.fillRect(i * w, c.height - h, w + 0.5, h);
+    });
+  });
+  ctx.globalCompositeOperation = "source-over";
+  const total = p.histogram[1].reduce((a, b) => a + b, 0) || 1;
+  const hi = Math.max(...shifted.map((h) => h[bins - 1])) / total * 100;
+  const lo = Math.min(...shifted.map((h) => h[0])) / total * 100;
+  $("clipLo").textContent = `Shadows clipped ${lo.toFixed(1)}%`;
+  $("clipHi").textContent = `Highlights ${hi.toFixed(1)}%`;
+  $("clipLo").className = lo > 2 ? "warn" : "";
+  $("clipHi").className = hi > 2 ? "warn" : "";
+}
+
+function applyViewerTools() {
+  const p = viewList[current];
+  if (!p) return;
+  $("frame").classList.toggle("show-focus", !!state.showFocus);
+  $("frame").classList.toggle("show-focusmap", !!state.showFocusMap);
+  const [r, c] = p.focus_tile || [0, 0];
+  Object.assign($("focusbox").style, { top: r * 25 + "%", left: c * 25 + "%" });
+
+  const g = gains();
+  const values = `${g[0]} 0 0 0 0  0 ${g[1]} 0 0 0  0 0 ${g[2]} 0 0  0 0 0 1 0`;
+  $("adjustMatrix").setAttribute("values", values);
+  $("clipMatrix").setAttribute("values", values);
+  const adjusted = adjust.ev || adjust.temp || adjust.tint;
+  $("big").style.filter = state.showClipping ? "url(#clip)" : adjusted ? "url(#adjust)" : "";
+
+  $("ev").value = adjust.ev; $("temp").value = adjust.temp; $("tint").value = adjust.tint;
+  $("evOut").textContent = (adjust.ev > 0 ? "+" : "") + adjust.ev.toFixed(1) + " EV";
+  $("tempOut").textContent = adjust.temp ? (adjust.temp > 0 ? "warmer " : "cooler ") + Math.abs(adjust.temp) : "0";
+  $("tintOut").textContent = adjust.tint ? (adjust.tint > 0 ? "magenta " : "green ") + Math.abs(adjust.tint) : "0";
+  drawHistogram(p, g);
+
+  const legend = [];
+  if (state.showClipping) legend.push(`<i style="background:#ff1a1a"></i>blown<i style="background:#2673ff"></i>crushed`);
+  if (state.showFocusMap) legend.push(`<i style="background:#40ff73"></i>sharp detail`);
+  if (state.showFocus) legend.push(`<i style="border:2px solid #4cff8f"></i>scored area`);
+  $("legend").innerHTML = legend.join(" ");
+}
+
+function open(list, i) {
+  viewList = list;
+  current = (i + list.length) % list.length;
+  const p = list[current];
+  $("big").src = p.preview;
+  $("focusmap").src = p.focus_map;
+  if ($("big").dataset.id !== String(p.id)) Object.assign(adjust, { ev: 0, temp: 0, tint: 0 });
+  $("big").dataset.id = p.id;
+  const label = { pick: "Pick", duplicate: "Similar to a better shot", reject: "Reject" }[p.decision];
+  const when = p.captured_at ? new Date(p.captured_at).toLocaleString() : "—";
+  const gps = p.gps ? `<a href="https://maps.google.com/?q=${p.gps[0]},${p.gps[1]}" target="_blank" rel="noopener">${p.gps[0]}, ${p.gps[1]}</a>` : "—";
+  const burst = bursts[p.burst];
+  const rows = [
+    ["Rank", p.rank ? `#${p.rank} of ${ranked.length}` : "— (rejected)"],
+    ["Decision", label], ["Rating", starText(p.stars) + " · " + Math.round(p.score)],
+    ["Taken", esc(when)], ["Camera", esc(p.camera || "—")], ["Lens", esc(p.lens || "—")],
+    ["Settings", esc(settings(p) || "—")], ["Location", gps],
+    ["Focus", p.sharpness], ["Brightness", Math.round(p.brightness) + " / 255"],
+    ["Faces", p.faces ? `${p.faces}${p.faces_eyes_closed ? ` (${p.faces_eyes_closed} possible blink)` : ""}` : "none"],
+  ];
+  const strip = burst.length > 1
+    ? `<h3>Burst · ${burst.length} frames, best first</h3><div class="strip">${burst.map((q) =>
+        `<button data-burst-open="${q.id}" class="${q.id === p.id ? "on" : ""}" title="${esc(q.name)}"><img src="${esc(q.thumb)}" alt=""><small>${q.rank ? "#" + q.rank : "✕"}</small></button>`).join("")}</div>`
+    : "";
+  $("info").innerHTML = `<h2>${esc(p.name)}</h2><div class="tags">${tags(p)}</div>
+    <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>${strip}
+    <p class="hint">${esc(p.file)}<br>Press <kbd>?</kbd> for shortcuts</p>`;
+  $("selToggle").setAttribute("aria-pressed", selected.has(p.id));
+  applyViewerTools();
+  if (!$("viewer").open) {
+    $("viewer").showModal();
+    // Otherwise the first slider takes focus and swallows the shortcuts.
+    $("stage").focus();
+  }
+}
+
+function openCompare() {
+  const items = [...selected].map((id) => PHOTOS[id]).sort((a, b) => (a.rank || 1e9) - (b.rank || 1e9));
+  const cols = items.length <= 2 ? items.length : 2;
+  $("compareGrid").style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  $("compareGrid").innerHTML = items.map((p) => `<figure class="${p.decision}" data-compare="${p.id}">
+      <img src="${esc(p.preview)}" alt="">
+      <figcaption><div class="row"><span class="name">${esc(p.name)}</span><span class="score">${p.rank ? "#" + p.rank : "rejected"} · ${Math.round(p.score)}</span></div>
+      <div class="meta">${esc(settings(p) || "—")}</div><div class="tags">${tags(p)}</div></figcaption></figure>`).join("");
+  $("comparer").showModal();
+}
+
+$("grid").addEventListener("click", (e) => {
+  const sel = e.target.closest("[data-select]");
+  if (sel) return toggleSelect(Number(sel.dataset.select));
+  const f = e.target.closest("figure");
+  if (f) open(visible, Number(f.dataset.i));
+});
+$("grid").addEventListener("keydown", (e) => {
+  const f = e.target.closest("figure");
+  if (!f) return;
+  if (e.key === "Enter") open(visible, Number(f.dataset.i));
+  if (e.key.toLowerCase() === "c") toggleSelect(visible[Number(f.dataset.i)].id);
+});
+$("info").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-burst-open]");
+  if (!b) return;
+  const p = PHOTOS[Number(b.dataset.burstOpen)];
+  const i = viewList.indexOf(p);
+  // Frames hidden by filters or burst collapsing still open; they join the list.
+  if (i >= 0) open(viewList, i);
+  else open([...viewList.slice(0, current + 1), p, ...viewList.slice(current + 1)], current + 1);
+});
+$("compareGrid").addEventListener("click", (e) => {
+  const f = e.target.closest("[data-compare]");
+  if (!f) return;
+  const items = [...$("compareGrid").querySelectorAll("[data-compare]")].map((x) => PHOTOS[Number(x.dataset.compare)]);
+  $("comparer").close();
+  open(items, items.indexOf(PHOTOS[Number(f.dataset.compare)]));
+});
+$("prev").onclick = () => open(viewList, current - 1);
+$("next").onclick = () => open(viewList, current + 1);
+$("selToggle").onclick = () => toggleSelect(viewList[current].id);
+$("compareBtn").onclick = openCompare;
+$("clearSel").onclick = () => { selected.clear(); render(); };
+$("helpBtn").onclick = () => $("help").showModal();
+$("copy").onclick = async () => {
+  const text = visible.map((p) => p.name).join("\n");
+  try { await navigator.clipboard.writeText(text); $("copy").textContent = `Copied ${visible.length}`; }
+  catch { prompt("Copy these file names:", text.replace(/\n/g, " ")); }
+  setTimeout(() => ($("copy").textContent = "Copy names"), 1600);
+};
+for (const d of document.querySelectorAll("dialog")) {
+  d.addEventListener("click", (e) => { if (e.target === d || e.target.closest("[data-close]")) d.close(); });
+}
+document.addEventListener("keydown", (e) => {
+  // Typing in a field, or arrowing a slider, isn't a shortcut.
+  if (e.target.matches("input:not([type=range]), select")) return;
+  if (e.target.matches("input[type=range]") && e.key.startsWith("Arrow")) return;
+  const key = e.key.toLowerCase();
+  if (key === "?") return $("help").showModal();
+  if (!$("viewer").open) return;
+  if (e.key === "ArrowLeft") open(viewList, current - 1);
+  if (e.key === "ArrowRight") open(viewList, current + 1);
+  if (key === "f") $("focusToggle").click();
+  if (key === "m") $("focusMapToggle").click();
+  if (key === "x") $("clipToggle").click();
+  if (key === "a") autoExposure();
+  if (key === "r") resetAdjust();
+  if (key === "c") toggleSelect(viewList[current].id);
+});
+
+buildControls();
+render();
+</script>
+</body>
+</html>

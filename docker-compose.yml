@@ -1,0 +1,7 @@
+services:
+  culler:
+    build: .
+    image: studio-prioritizer
+    volumes:
+      # PHOTOS is the trip folder on your Mac, e.g. PHOTOS=~/Pictures/Japan-2026
+      - ${PHOTOS:?Set PHOTOS to the folder you want to cull}:/photos
