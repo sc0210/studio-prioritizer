@@ -39,7 +39,12 @@ To view the report, open `~/Pictures/Japan-2026/.studio-photo/report.html` in a 
 - **Rank:** every non-rejected photo gets a rank (#1 is the strongest of the trip). A **Top 10 / 25 / 50 / 100** filter jumps straight to the best photos.
 - **Filters:** by pick, similar or reject, by file type (ARW or JPG), by minimum stars, or by note (needs exposure fix, possible blink). You can also search by file name.
 - **One per burst:** shows only the best frame of each burst. The viewer shows the other frames in a strip.
-- **Viewer:** click a photo for a large preview with its EXIF data, and use ← → to step through. **Focus area** (`F`) outlines where the focus score was measured. **Fix exposure** (`E`) previews a dark or bright shot with its exposure evened out.
+- **Viewer:** click a photo for a large preview with its EXIF data, and use ← → to step through. A tool panel on the left has:
+  - an RGB **histogram** with the percentage of clipped shadows and highlights;
+  - **Exposure**, **Temperature** and **Tint** sliders, plus **Auto exposure** (`A`) and **Reset** (`R`). These only change the preview, so your real edits still happen in Capture One;
+  - a **Clipping** map (`X`): blown highlights in red, crushed shadows in blue, updated as you move the sliders;
+  - a **Focus map** (`M`): sharp detail glows green, using the same edge measure as the focus score;
+  - **Focus area** (`F`): outlines the region the focus score was taken from.
 - **Compare:** tick 2 to 4 photos (or press `C`) to see them side by side.
 - **Day headers:** when sorted by time, photos are grouped under the day they were taken.
 - **Copy names:** puts the file names in the current view on the clipboard.

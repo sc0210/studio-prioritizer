@@ -8,6 +8,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from .metrics import focus_map
 from .scoring import Result
 
 THUMB_SIZE = 480
@@ -15,9 +16,10 @@ TEMPLATE = Path(__file__).parent / "report_template.html"
 
 
 def save_images(rgb, result: Result, root: Path, out_dir: Path) -> None:
-    """A grid thumbnail and a larger preview for the report's viewer."""
+    """A grid thumbnail, a larger preview and a focus map for the report's viewer."""
     image = Image.fromarray(rgb)
     image.save(out_dir / image_name(result, root, "previews"), "JPEG", quality=82)
+    Image.fromarray(focus_map(rgb)).save(out_dir / image_name(result, root, "focus"), "JPEG", quality=75)
     image.thumbnail((THUMB_SIZE, THUMB_SIZE))
     image.save(out_dir / image_name(result, root, "thumbs"), "JPEG", quality=80)
 
@@ -34,7 +36,7 @@ def write_results(results: list[Result], root: Path, out_dir: Path) -> None:
 
 
 def image_name(result: Result, root: Path, kind: str) -> str:
-    # Keep the extension in the name so A.ARW and A.jpg never share a file.
+    # Keep the photo's extension in the name so A.ARW and A.jpg never share a file.
     rel = result.info.path.relative_to(root)
     return f"{kind}/" + "__".join(rel.parts) + ".jpg"
 
@@ -75,6 +77,8 @@ def _html(results: list[Result], root: Path) -> str:
         row["type"] = r.info.path.suffix.lstrip(".").upper().replace("JPEG", "JPG")
         row["thumb"] = image_name(r, root, "thumbs")
         row["preview"] = image_name(r, root, "previews")
+        row["focus_map"] = image_name(r, root, "focus")
+        row["histogram"] = r.metrics.histogram
         rows.append(row)
     # "</" can't appear inside a <script> block, so escape it in the data.
     data = json.dumps(rows, default=str).replace("</", "<\\/")

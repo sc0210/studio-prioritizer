@@ -101,6 +101,22 @@ def test_covered_eyes_are_flagged():
     assert measure(face).faces_eyes_closed == 1
 
 
+def test_focus_map_is_bright_only_where_sharp():
+    from culler.metrics import focus_map
+
+    sharp = data.astronaut()
+    soft = np.asarray(Image.fromarray(sharp).filter(ImageFilter.GaussianBlur(4)))
+    sharp_map, soft_map = focus_map(sharp), focus_map(soft)
+    assert sharp_map.shape == (256, 256) and sharp_map.dtype == np.uint8
+    assert sharp_map.mean() > 4 * soft_map.mean()
+
+
+def test_histogram_shape():
+    hist = measure(data.coffee()).histogram
+    assert len(hist) == 3 and all(len(h) == 64 for h in hist)
+    assert max(max(h) for h in hist) == 1000
+
+
 def test_blurry_frame_measures_softer():
     sharp = data.astronaut()
     soft = np.asarray(Image.fromarray(sharp).filter(ImageFilter.GaussianBlur(4)))
@@ -146,7 +162,9 @@ def test_scan_end_to_end(trip: Path):
     xmp = sidecar_path(trip / "DSC00020.JPG").read_text()
     assert 'xmp:Label="Red"' in xmp and 'xmp:Rating="1"' in xmp
     assert 'xmp:Label="Green"' in sidecar_path(trip / "DSC00010.JPG").read_text()
-    assert (trip / ".studio-photo" / "report.html").exists()
+    report = (trip / ".studio-photo" / "report.html").read_text()
+    assert '"focus_map": "focus/DSC00010.JPG.jpg"' in report
+    assert (trip / ".studio-photo" / "focus" / "DSC00010.JPG.jpg").exists()
 
 
 def test_existing_sidecars_are_left_alone(trip: Path):

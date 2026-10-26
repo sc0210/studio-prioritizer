@@ -34,7 +34,7 @@ def scan(args: argparse.Namespace) -> int:
         print(f"Not a folder: {root}", file=sys.stderr)
         return 2
     out_dir = Path(args.out).resolve() if args.out else root / ".studio-photo"
-    for kind in ("thumbs", "previews"):
+    for kind in ("thumbs", "previews", "focus"):
         (out_dir / kind).mkdir(parents=True, exist_ok=True)
 
     photos = find_photos(root)

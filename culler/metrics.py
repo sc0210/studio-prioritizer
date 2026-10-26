@@ -37,6 +37,9 @@ class Metrics:
     faces: int
     faces_eyes_closed: int  # faces where no open eye was found
     phash: str
+    # Per-channel (R, G, B) histograms, 64 bins each, scaled so the tallest
+    # bin across channels is 1000. Drawn by the report's viewer.
+    histogram: list[list[int]]
 
 
 def measure(rgb: np.ndarray) -> Metrics:
@@ -56,7 +59,37 @@ def measure(rgb: np.ndarray) -> Metrics:
         faces=faces,
         faces_eyes_closed=closed,
         phash=str(imagehash.phash(Image.fromarray(rgb))),
+        histogram=_histogram(rgb),
     )
+
+
+def _histogram(rgb: np.ndarray, bins: int = 64) -> list[list[int]]:
+    counts = [np.bincount(rgb[..., c].ravel() // (256 // bins), minlength=bins) for c in range(3)]
+    peak = max(int(c.max()) for c in counts) or 1
+    return [[round(1000 * int(v) / peak) for v in c] for c in counts]
+
+
+# Mean absolute Laplacian at which a region shows as fully in focus.
+FOCUS_MAP_FULL = 14.0
+
+
+def focus_map(rgb: np.ndarray) -> np.ndarray:
+    """A grayscale map, bright where the image is sharp, at half the preview size.
+
+    Same measure as the focus score (edge strength on a tone-stretched copy),
+    but local, so you can see which parts of the frame carry the detail. The
+    report tints it green and lays it over the photo.
+    """
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    low, high = np.percentile(gray, (1, 99))
+    normalized = _normalize(gray, low, high)
+    smooth = cv2.GaussianBlur(normalized, (3, 3), 0)
+    energy = np.abs(cv2.Laplacian(smooth, cv2.CV_32F))
+    size = max(9, (min(gray.shape) // 40) | 1)
+    local = cv2.blur(energy, (size, size))
+    strength = np.clip(local / FOCUS_MAP_FULL, 0, 1) ** 2
+    small = cv2.resize(strength, (gray.shape[1] // 2, gray.shape[0] // 2), interpolation=cv2.INTER_AREA)
+    return (small * 255).astype(np.uint8)
 
 
 def _normalize(image: np.ndarray, low: float, high: float) -> np.ndarray:
